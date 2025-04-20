@@ -21,6 +21,8 @@ interface Drink {
   timestamp: Date;
   id: string;
   beerName?: string;
+  alcoholPercentage?: string;
+  beerType?: string;
 }
 
 const beerData: BeerType[] = [
@@ -99,12 +101,16 @@ export const DrinkLogger = () => {
   const percentOfLimit = Math.min(100, (totalAmount / recommendedLimit) * 100);
 
   const logDrink = (type: Drink['type'], beerName?: string) => {
+    const selectedBeerData = type === 'beer' ? beerData.find(b => b.name === beerName) : null;
+    
     const newDrink = {
       type,
       amount: type === 'beer' ? 330 : type === 'wine' ? 150 : 45,
       timestamp: new Date(),
       id: Date.now().toString(),
-      beerName
+      beerName,
+      alcoholPercentage: selectedBeerData?.alcoholPercentage,
+      beerType: selectedBeerData?.type
     };
     
     setDrinks([...drinks, newDrink]);
@@ -216,7 +222,15 @@ export const DrinkLogger = () => {
                             </div>
                             <div>
                               <p className="font-medium">{drink.beerName || drink.type.charAt(0).toUpperCase() + drink.type.slice(1)}</p>
-                              <p className="text-xs text-gray-500">{drink.amount}ml</p>
+                              <div className="text-xs text-gray-500 space-y-0.5">
+                                <p>{drink.amount}ml</p>
+                                {drink.alcoholPercentage && (
+                                  <p>Alcohol: {drink.alcoholPercentage}</p>
+                                )}
+                                {drink.beerType && (
+                                  <p>Type: {drink.beerType}</p>
+                                )}
+                              </div>
                             </div>
                           </div>
                           
