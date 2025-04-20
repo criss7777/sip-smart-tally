@@ -6,36 +6,115 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { BeerTable } from "./BeerTable";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { Beer as BeerType } from "@/types/beer";
 
 interface Drink {
   type: 'beer' | 'wine' | 'spirits';
   amount: number;
   timestamp: Date;
   id: string;
+  beerName?: string;
 }
+
+const beerData: BeerType[] = [
+  {
+    name: "Birra Tirana",
+    alcoholPercentage: "4.1%",
+    type: "Lager",
+    safeAmountMale: "1 deri në 2 shishe (500 ml)",
+    safeAmountFemale: "1 shishe (330–500 ml)",
+  },
+  {
+    name: "Birra Korça",
+    alcoholPercentage: "4.5%",
+    type: "Pilsner",
+    safeAmountMale: "1 deri në 2 shishe (500 ml)",
+    safeAmountFemale: "1 shishe (330–500 ml)",
+  },
+  {
+    name: "Birra Peja",
+    alcoholPercentage: "4.2%",
+    type: "Lager",
+    safeAmountMale: "1 deri në 2 shishe (500 ml)",
+    safeAmountFemale: "1 shishe",
+  },
+  {
+    name: "Birra Stela",
+    alcoholPercentage: "4.6%",
+    type: "Lager",
+    safeAmountMale: "1 deri në 2 shishe",
+    safeAmountFemale: "1 shishe",
+  },
+  {
+    name: "Birra Elbar",
+    alcoholPercentage: "4.2%",
+    type: "Lager",
+    safeAmountMale: "1 deri në 2 shishe",
+    safeAmountFemale: "1 shishe",
+  },
+  {
+    name: "Amstel / Heineken",
+    alcoholPercentage: "5.0%",
+    type: "Lager/Pilsner",
+    safeAmountMale: "1 shishe e vetme",
+    safeAmountFemale: "max. 330 ml",
+  },
+  {
+    name: "Erdinger / Paulaner",
+    alcoholPercentage: "5.3–5.5%",
+    type: "Weissbier",
+    safeAmountMale: "max. 1 shishe",
+    safeAmountFemale: "max. 330 ml",
+  },
+  {
+    name: "Guinness",
+    alcoholPercentage: "4.2–5.6%",
+    type: "Stout",
+    safeAmountMale: "max. 1 shishe",
+    safeAmountFemale: "max. 330 ml",
+  },
+  {
+    name: "IPA Artizanale",
+    alcoholPercentage: "5.5–7.0%",
+    type: "IPA",
+    safeAmountMale: "max. 1 shishe",
+    safeAmountFemale: "max. 330 ml",
+  },
+];
 
 export const DrinkLogger = () => {
   const [drinks, setDrinks] = useState<Drink[]>([]);
+  const [selectedBeer, setSelectedBeer] = useState<string>("");
   const { toast } = useToast();
   
   const totalAmount = drinks.reduce((sum, drink) => sum + drink.amount, 0);
   const recommendedLimit = 600;
   const percentOfLimit = Math.min(100, (totalAmount / recommendedLimit) * 100);
 
-  const logDrink = (type: Drink['type']) => {
+  const logDrink = (type: Drink['type'], beerName?: string) => {
     const newDrink = {
       type,
       amount: type === 'beer' ? 330 : type === 'wine' ? 150 : 45,
       timestamp: new Date(),
-      id: Date.now().toString()
+      id: Date.now().toString(),
+      beerName
     };
     
     setDrinks([...drinks, newDrink]);
     
     toast({
-      title: `${type.charAt(0).toUpperCase() + type.slice(1)} added`,
+      title: `${beerName || type.charAt(0).toUpperCase() + type.slice(1)} added`,
       description: `${newDrink.amount}ml logged successfully`,
     });
+
+    setSelectedBeer("");
   };
 
   const removeDrink = (id: string) => {
@@ -53,6 +132,11 @@ export const DrinkLogger = () => {
       case 'spirits': return <GlassWater className="w-4 h-4" />;
       default: return <div className="w-4 h-4" />;
     }
+  };
+
+  const handleBeerSelect = (value: string) => {
+    setSelectedBeer(value);
+    logDrink('beer', value);
   };
 
   return (
@@ -77,13 +161,21 @@ export const DrinkLogger = () => {
               </div>
               
               <div className="grid grid-cols-3 gap-3">
-                <Button
-                  onClick={() => logDrink('beer')}
-                  className="flex flex-col items-center justify-center gap-2 py-6 bg-amber-600 hover:bg-amber-700"
-                >
-                  <Beer className="w-6 h-6" />
-                  <span className="text-xs font-medium">Beer</span>
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Select value={selectedBeer} onValueChange={handleBeerSelect}>
+                    <SelectTrigger className="w-full h-full min-h-[96px] flex flex-col items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white">
+                      <Beer className="w-6 h-6" />
+                      <SelectValue placeholder="Select Beer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {beerData.map((beer) => (
+                        <SelectItem key={beer.name} value={beer.name}>
+                          {beer.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 
                 <Button
                   onClick={() => logDrink('wine')}
@@ -123,7 +215,7 @@ export const DrinkLogger = () => {
                               {getTypeIcon(drink.type)}
                             </div>
                             <div>
-                              <p className="font-medium capitalize">{drink.type}</p>
+                              <p className="font-medium">{drink.beerName || drink.type.charAt(0).toUpperCase() + drink.type.slice(1)}</p>
                               <p className="text-xs text-gray-500">{drink.amount}ml</p>
                             </div>
                           </div>
