@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Beer, Wine, Clock, GlassWater, Trash2 } from "lucide-react";
+import { Beer, Wine, Clock, GlassWater, Trash2, MaleSign, FemaleSign, AlertTriangle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Beer as BeerType } from "@/types/beer";
+import { GenderDialog } from "./GenderDialog";
 
 interface Drink {
   type: 'beer' | 'wine' | 'spirits';
@@ -91,19 +92,92 @@ const beerData: BeerType[] = [
   },
 ];
 
+const beerGuidelines = [
+  {
+    type: "Light Lager",
+    range: "3.5–4.5%",
+    limit: { male: 600, female: 400 },
+  },
+  {
+    type: "Regular Lager",
+    range: "5.0%",
+    limit: { male: 500, female: 330 },
+  },
+  {
+    type: "Strong Lager",
+    range: "6–7%",
+    limit: { male: 400, female: 300 },
+  },
+  {
+    type: "IPA/Craft",
+    range: "6–8%",
+    limit: { male: 330, female: 250 },
+  },
+  {
+    type: "Stout/Dark Beer",
+    range: "5–7%",
+    limit: { male: 400, female: 300 },
+  },
+  {
+    type: "Wheat Beer",
+    range: "5.3%",
+    limit: { male: 400, female: 300 },
+  },
+  {
+    type: "Alcohol-free",
+    range: "<0.5%",
+    limit: { male: -1, female: -1 },
+  }
+];
+
+function findBeerGuideline(alcoholPercentage: string, beerType: string) {
+  const percentNum = parseFloat(alcoholPercentage.replace(/[^\d.]/g, ''));
+  if (beerType?.toLowerCase().includes("ipa")) return beerGuidelines.find(g => g.type === "IPA/Craft");
+  if (beerType?.toLowerCase().includes("wheat")) return beerGuidelines.find(g => g.type === "Wheat Beer");
+  if (beerType?.toLowerCase().includes("stout")) return beerGuidelines.find(g => g.type === "Stout/Dark Beer");
+  if (percentNum <= 4.5) return beerGuidelines[0];
+  if (percentNum === 5) return beerGuidelines[1];
+  if (percentNum > 5 && percentNum <= 5.4) return beerType?.toLowerCase().includes("wheat") ? beerGuidelines[5] : beerGuidelines[1];
+  if (percentNum >= 6 && percentNum <= 7) return beerGuidelines[2];
+  if (percentNum > 7) return beerGuidelines[3];
+  if (/alkoh.*free|<0.\d+/.test(alcoholPercentage.toLowerCase())) return beerGuidelines[6];
+  return undefined;
+}
+
 export const DrinkLogger = () => {
   const [drinks, setDrinks] = useState<Drink[]>([]);
   const [selectedBeer, setSelectedBeer] = useState<string>("");
   const { toast } = useToast();
-  
+  const [gender, setGender] = useState<"male" | "female" | null>(null);
+  const [genderDialogOpen, setGenderDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('gender');
+    if (saved === 'male' || saved === 'female') {
+      setGender(saved);
+    } else {
+      setGenderDialogOpen(true);
+    }
+  }, []);
+
+  const handleSelectGender = (g: "male" | "female") => {
+    setGender(g);
+    localStorage.setItem('gender', g);
+    setGenderDialogOpen(false);
+  };
+
+  if (!gender) {
+    return <GenderDialog open={genderDialogOpen} onSelect={handleSelectGender} />;
+  }
+
   const totalAmount = drinks.reduce((sum, drink) => sum + drink.amount, 0);
   const recommendedLimit = 600;
   const percentOfLimit = Math.min(100, (totalAmount / recommendedLimit) * 100);
 
   const logDrink = (type: Drink['type'], beerName?: string) => {
     const selectedBeerData = type === 'beer' ? beerData.find(b => b.name === beerName) : null;
-    
-    const newDrink = {
+
+    const newDrink: Drink = {
       type,
       amount: type === 'beer' ? 330 : type === 'wine' ? 150 : 45,
       timestamp: new Date(),
@@ -112,13 +186,26 @@ export const DrinkLogger = () => {
       alcoholPercentage: selectedBeerData?.alcoholPercentage,
       beerType: selectedBeerData?.type
     };
-    
+
+    const warning = type === 'beer' ? checkBeerLimit([...drinks, newDrink], newDrink) : null;
+
     setDrinks([...drinks, newDrink]);
-    
+
     toast({
       title: `${beerName || type.charAt(0).toUpperCase() + type.slice(1)} added`,
       description: `${newDrink.amount}ml logged successfully`,
     });
+
+    if (warning) {
+      toast({
+        title: `Warning: Too much ${warning.type}`,
+        description: `You crossed the daily safe limit (${
+          gender === "male" ? "Men" : "Women"
+        }: ${warning.limit}ml, you're at ${warning.actual}ml). Please drink responsibly!`,
+        variant: "destructive",
+        icon: <AlertTriangle className="mr-2 text-red-500" />,
+      });
+    }
 
     setSelectedBeer("");
   };
@@ -145,14 +232,70 @@ export const DrinkLogger = () => {
     logDrink('beer', value);
   };
 
+  const checkBeerLimit = (drinks: Drink[], latest?: Drink) => {
+    const genderKey = gender;
+    const beerDrinks = drinks.filter(d => d.type === "beer" && d.alcoholPercentage && d.beerType);
+    let overLimitInfo: { type?: string; limit?: number; actual?: number } | null = null;
+
+    beerDrinks.forEach(curr => {
+      const guideline = findBeerGuideline(curr.alcoholPercentage!, curr.beerType!);
+      if (!guideline || guideline.limit[genderKey] === -1) return;
+      const sumAmount = beerDrinks
+        .filter(d =>
+          findBeerGuideline(d.alcoholPercentage!, d.beerType!)?.type === guideline.type
+        )
+        .reduce((acc, d) => acc + d.amount, 0);
+
+      if (sumAmount > guideline.limit[genderKey]) {
+        overLimitInfo = {
+          type: guideline.type,
+          limit: guideline.limit[genderKey],
+          actual: sumAmount,
+        };
+      }
+    });
+
+    if (latest && latest.type === "beer" && latest.alcoholPercentage && latest.beerType) {
+      const guideline = findBeerGuideline(latest.alcoholPercentage, latest.beerType);
+      if (guideline && guideline.limit[genderKey] !== -1) {
+        const thisAmount = beerDrinks
+          .filter(
+            d => findBeerGuideline(d.alcoholPercentage!, d.beerType!)?.type === guideline.type
+          )
+          .reduce((a, d) => a + d.amount, latest.amount);
+        if (thisAmount > guideline.limit[genderKey]) {
+          overLimitInfo = {
+            type: guideline.type,
+            limit: guideline.limit[genderKey],
+            actual: thisAmount,
+          };
+        }
+      }
+    }
+
+    return overLimitInfo;
+  };
+
   return (
     <div className="space-y-8">
+      <GenderDialog open={genderDialogOpen} onSelect={handleSelectGender} />
+
       <div className="p-4 max-w-md mx-auto">
         <Card className="overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
             <CardTitle className="text-2xl font-bold text-center">Drink Tracker</CardTitle>
+            <div className="flex gap-3 justify-center mt-2">
+              <span className="text-sm flex items-center gap-1">
+                {gender === "male" && <MaleSign className="w-4 h-4 text-blue-400" />} 
+                {gender === "female" && <FemaleSign className="w-4 h-4 text-pink-400" />} 
+                {gender === "male" ? "Male" : "Female"}
+              </span>
+              <Button size="sm" variant="outline" className="text-xs py-1 px-2" onClick={() => setGenderDialogOpen(true)}>
+                Switch Gender
+              </Button>
+            </div>
           </CardHeader>
-          
+
           <CardContent className="p-6">
             <div className="space-y-6">
               <div className="space-y-2">
@@ -265,6 +408,29 @@ export const DrinkLogger = () => {
       </div>
 
       <div className="max-w-4xl mx-auto px-4">
+        <h2 className="text-2xl font-bold mb-4">Data On Safe Beer Consumption</h2>
+        <div className="overflow-x-auto rounded-lg shadow-md bg-white mb-6">
+          <table className="min-w-[540px] text-sm">
+            <thead>
+              <tr className="bg-gray-100 text-gray-800">
+                <th className="py-2 px-4">Beer Type</th>
+                <th className="py-2 px-4">% Alcohol</th>
+                <th className="py-2 px-4">Safe Limit (Men)</th>
+                <th className="py-2 px-4">Safe Limit (Women)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {beerGuidelines.map((g) => (
+                <tr key={g.type} className="text-center border-b last:border-0">
+                  <td className="py-2 px-4 font-semibold text-left">{g.type}</td>
+                  <td className="py-2 px-4">{g.range}</td>
+                  <td className="py-2 px-4">{g.limit.male === -1 ? "No strict limit" : `${g.limit.male} ml`}</td>
+                  <td className="py-2 px-4">{g.limit.female === -1 ? "No strict limit" : `${g.limit.female} ml`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <h2 className="text-2xl font-bold mb-4">Informacion për Llojet e Birrës</h2>
         <BeerTable />
       </div>
