@@ -28,12 +28,12 @@ export const GenderDialog: React.FC<GenderDialogProps> = ({ open, onSelect }) =>
           value={value}
           onValueChange={v => setValue(v as "male" | "female")}
         >
-          <label className="flex items-center gap-3 rounded-lg border px-4 py-2 cursor-pointer hover:bg-primary-100">
+          <label className="flex items-center gap-3 rounded-lg border px-4 py-2 cursor-pointer hover:bg-primary-100" htmlFor="male">
             <RadioGroupItem value="male" id="male"/>
             <MaleSign className="text-blue-600" />
             <span>Male</span>
           </label>
-          <label className="flex items-center gap-3 rounded-lg border px-4 py-2 cursor-pointer hover:bg-primary-100">
+          <label className="flex items-center gap-3 rounded-lg border px-4 py-2 cursor-pointer hover:bg-primary-100" htmlFor="female">
             <RadioGroupItem value="female" id="female" />
             <FemaleSign className="text-pink-500" />
             <span>Female</span>
